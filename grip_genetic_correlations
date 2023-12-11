@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --job-name="ldsc_rg"
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8Gb
+
+source activate ldsc
+
+# Run LDSC on multiple phenotypes and store important information for each pheno
+
+path="/home/fabbonda/scratch/private/20220130_GWAS_grip_best_worst_Filippo/genetic_correlations/29122021"
+outFolder="inverse_variance_based_meta_analysis_re_analysis"
+phenoFile="phenos_rg.txt"
+
+for i in GS.best.metal.inverse.variance.MAF0.05.reanalysis GS.worst.metal.inverse.variance.MAF0.05.reanalysis # Use the ALSPAC sumstats
+do
+        for j in $(cat $path/$phenoFile)
+                do
+                pheno1=$i
+                pheno2=$j
+                echo -e "Pheno1 = $pheno1\nPheno2 = $pheno2"
+                python2.7 ~/scratch/tools/ldsc/ldsc.py  --rg $path/gs_sumstats/$pheno1.sumstats.gz,$path/external_sumstats/sumstats/$pheno2.sumstats.gz \
+                --ref-ld-chr ~/scratch/tools/ldsc/eur_w_ld_chr/ \
+                --w-ld-chr ~/scratch/tools/ldsc/eur_w_ld_chr/ \
+                --out $path/genetic_correlations/$outFolder/$pheno1.$pheno2
+                echo "Analysis done"
+                done
+done
+
+cd $path/genetic_correlations/$outFolder
+touch info.all.new
+for i in *.log
+do
+        echo -e "$i" >> info.all.new
+        grep -E '^Genetic Correlation:'  $i >> info.all.new
+        grep -E '^Z-score' $i >> info.all.new
+        grep -E "P: " $i >> info.all.new
+        echo -e "\n" >> info.all.new
+done
