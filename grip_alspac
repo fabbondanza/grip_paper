@@ -1,0 +1,89 @@
+#!/bin/bash
+
+phenofile="/home/fabbonda/scratch/private/20220130_GWAS_grip_best_worst_Filippo/grip.20022022.zscore.sample"
+
+for pheno in grip.best.hand grip.worst.hand
+do
+
+cd ${pheno}.ALSPAC.22022022.bgen.MAF0.05 # Use MAF 5% as cut-off
+
+echo -e "Make scripts for $pheno"
+
+for i in {1..22}
+
+do
+cat > $pheno.chr${i}.sh <<EOF1
+#!/bin/bash
+#SBATCH --job-name="gwas"
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=10G
+
+~/scratch/apps/conda/envs/geno_utils/bin/bolt \
+--bfile=/mnt/shared/projects/uosa/Silvia_Paracchini/shared/shared_data/new_alspac_external_500G_4/genetics/ARRAY_2019-05-13/all1/data/data \
+--bgenFile=/mnt/shared/projects/uosa/Silvia_Paracchini/shared/shared_data/new_alspac_external_500G_4/genetics/HRC_2019-05-13/all1/data/bgen_8bit/data_8bit_$i.bgen \
+--sampleFile=/mnt/shared/projects/uosa/Silvia_Paracchini/shared/shared_data/new_alspac_external_500G_4/genetics/HRC_2019-05-13/all1/data/data.sample \
+--bgenMinMAF=0.05 \
+--bgenMinINFO=0.4 \
+--phenoFile=$phenofile \
+--phenoCol=$pheno \
+--covarFile=$phenofile \
+--covarCol=sex \
+--qCovarCol=age_grip \
+--lmm \
+--LDscoresFile=/home/fabbonda/scratch/tools/BOLT-LMM_v2.3.4/tables/LDSCORE.1000G_EUR.tab.gz \
+--geneticMapFile=/home/fabbonda/scratch/tools/BOLT-LMM_v2.3.4/tables/genetic_map_hg19_withX.txt.gz \
+--numThreads=8 \
+--statsFile=results/$pheno.chr${i}.stats.gz \
+--statsFileBgenSnps=results/$pheno.chr${i}.bgen.stats.gz \
+--verboseStats
+
+EOF1
+
+chmod +x $pheno.chr${i}.sh
+
+sbatch $pheno.chr${i}.sh
+
+done
+
+cat > $pheno.heritability.sh <<EOF2
+#!/bin/bash
+
+#SBATCH --job-name="heritability"
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=4G
+
+~/scratch/apps/conda/envs/geno_utils/bin/bolt \
+--bfile=/mnt/shared/projects/uosa/Silvia_Paracchini/shared/shared_data/new_alspac_external_500G_4/genetics/ARRAY_2019-05-13/all1/data/data \
+--phenoFile=${phenofile} \
+--phenoCol=$pheno \
+--covarFile=${phenofile} \
+--covarCol=sex \
+--qCovarCol=age_grip \
+--reml \
+--numThreads=8 \
+--geneticMapFile=/home/fabbonda/scratch/tools/BOLT-LMM_v2.3.4/tables/genetic_map_hg19_withX.txt.gz \
+> $pheno.h2
+
+EOF2
+
+chmod +x $pheno.heritability.sh
+
+sbatch $pheno.heritability.sh
+
+cat > results/${pheno}.combine.results.sh <<EOF3
+#!/bin/bash
+
+#SBATCH --job-name="combine.results"
+#SBATCH --mem=8G
+
+echo "Opening files"
+
+for i in {1..22}
+do
+  gunzip ${pheno}.chr\${i}.bgen.stats.gz
+        awk 'NR > 1' ${pheno}.chr\${i}.bgen.stats > ${pheno}.chr\${i}.temp
+  gzip ${pheno}.chr\${i}.bgen.stats
+done
+
+echo "Concatenating files"
+cat ${pheno}.chr1.temp ${pheno}.chr2.temp ${pheno}.chr3.temp ${pheno}.chr4.temp ${pheno}.chr5.temp ${pheno}.chr6.temp ${pheno}.chr7.temp ${pheno}.chr8.temp ${pheno}.chr9.temp ${pheno}.chr10.temp ${pheno}.chr11.temp ${pheno}.chr12.temp  ${pheno}.chr13.temp ${pheno}.chr14.temp ${pheno}.chr15.temp ${pheno}.chr16.temp ${pheno}.chr17.temp ${pheno}.chr18.temp ${pheno}.chr19.temp ${pheno}.chr20.temp ${pheno}.chr21.temp ${pheno}.chr22.temp > sumstats.${pheno}
